@@ -9,6 +9,9 @@ from Config import API_ID, API_HASH, BOT_TOKEN
 
 bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+USERNAME = "I._hot_boy"
+PASSWORD = "Sinchu@2004"
+
 L = instaloader.Instaloader(
     dirname_pattern="downloads/{target}",
     download_video_thumbnails=False,
@@ -16,13 +19,12 @@ L = instaloader.Instaloader(
     post_metadata_txt_pattern=""
 )
 
-# ✅ Login to avoid 401 errors
-# Option A: Username/Password (Enable this if you want)
-# L.login("your_username", "your_password")
+# Direct login
+L.login(USERNAME, PASSWORD)
 
-# Option B: Session login (Recommended)
-# Make sure you saved a session file before with: instaloader --login=your_username
-L.load_session_from_file("43hi1_")  # replace with your actual username
+# Now you can use it normally
+profile = instaloader.Profile.from_username(L.context, "soniya_rajput_9911")
+print(f"Full name: {profile.full_name}")
 
 def get_username(text: str):
     match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)

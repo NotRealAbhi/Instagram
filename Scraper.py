@@ -17,22 +17,20 @@ headers = {
 async def fetch_page(url: str) -> str:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            cookies=[{
-                "name": "sessionid",
-                "value": SESSION_ID,
-                "domain": ".instagram.com",
-                "path": "/",
-                "url": "https://www.instagram.com"
-            }],
-            user_agent=headers["User-Agent"]
-        )
+        context = await browser.new_context(user_agent=headers["User-Agent"])
+        await context.add_cookies([{
+            "name": "sessionid",
+            "value": SESSION_ID,
+            "domain": ".instagram.com",
+            "path": "/"
+        }])
         page = await context.new_page()
         await page.goto(url)
         await page.wait_for_timeout(3000)
         html = await page.content()
         await browser.close()
         return html
+
 
 
 async def fetch_media_links(html: str) -> list:

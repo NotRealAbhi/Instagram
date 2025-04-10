@@ -9,9 +9,12 @@ from Config import API_ID, API_HASH, BOT_TOKEN
 
 bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-sessionid = "70251829033%3AWxEGqggNOdfsNJ%3A13%3AAYcKvGI0IPZ6F1PFMA3Oh0dp0jw-xf1OBp2E_o515g"  # Replace with your real Instagram sessionid
-L = instaloader.Instaloader()
-L.context._session.cookies.set("sessionid", sessionid)
+L = instaloader.Instaloader(dirname_pattern="downloads/{profile}")
+try:
+    L.load_session_from_file("your_username")  # username used to login and save session
+except Exception as e:
+    print("❌ Failed to load session:", e)
+
 
 # Verify login
 try:

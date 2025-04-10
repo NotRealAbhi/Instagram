@@ -1,28 +1,42 @@
 import requests
 from Config import SESSION_ID
-# Replace this with your actual session ID
+import asyncio
+from playwright.async_api import async_playwright
 
-# URL for your Instagram profile
-username = 'soniya_rajput_9911'  # Replace with the username you're testing
-url = f'https://www.instagram.com/{username}/'
+async def fetch_instagram_profile(username, session_id):
+    # Launch the Playwright browser
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            cookies=[{
+                'name': 'sessionid',
+                'value': session_id,
+                'domain': '.instagram.com'
+            }]
+        )
+        page = await context.new_page()
+        
+        # Go to the Instagram profile URL
+        await page.goto(f'https://www.instagram.com/{username}/')
 
-# Set the headers with the session ID
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-}
+        # Wait for the page to load
+        await page.wait_for_selector('meta[name="description"]', timeout=30000)
 
-cookies = {
-    'sessionid': SESSION_ID
-}
+        # Extract profile info (this could be more complex depending on what you want to scrape)
+        profile_description = await page.locator('meta[name="description"]').get_attribute('content')
 
-# Send the GET request with the session ID
-response = requests.get(url, headers=headers, cookies=cookies)
+        # Close the browser
+        await browser.close()
+        
+        return profile_description
 
-# Check the response
-if response.status_code == 200:
-    print("Session ID is valid!")
-    print("Response Content:")
-    print(response.text[:500])  # Print the first 500 characters of the response for inspection
-else:
-    print(f"Failed to fetch data. Status Code: {response.status_code}")
-    print(f"Response: {response.text[:500]}")  # Print the first 500 characters of the error response
+# Example usage:
+username = 'soniya_rajput_9911'  # Instagram username
+session_id = 'your-session-id-here'  # Replace with your session ID
+
+async def main():
+    profile_data = await fetch_instagram_profile(username, session_id)
+    print("Profile Data:", profile_data)
+
+# Run the script
+asyncio.run(main())

@@ -1,50 +1,27 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message
-from scraper import fetch_page
-from Config import SESSION_ID
-from playwright.async_api import async_playwright
-import re
-import aiofiles
-import asyncio
 import os
 import uuid
+from Scraper import fetch_stories_data
 
-
-async def fetch_stories(username):
+async def fetch_stories(message, username):
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(storage_state=SESSION_ID)
-            page = await context.new_page()
-            await page.goto(f"https://www.instagram.com/stories/{username}/", timeout=60000)
-            await asyncio.sleep(3)
+        stories = await fetch_stories_data(username)
+        if not stories:
+            return await message.reply("❌ No active stories found.")
 
-            stories = []
-            elements = await page.query_selector_all('video, img')
-            for elem in elements:
-                src = await elem.get_attribute('src')
-                if src and "stories" in src:
-                    stories.append(src)
+        media_group = []
+        from pyrogram.types import InputMediaPhoto, InputMediaVideo
 
-            await browser.close()
-            return stories
+        for story in stories:
+            media_type = story.get("type")
+            url = story.get("url")
+            caption = f"🧾 Story from @{username}"
+
+            if media_type == "video":
+                media_group.append(InputMediaVideo(media=url, caption=caption if len(media_group) == 0 else ""))
+            else:
+                media_group.append(InputMediaPhoto(media=url, caption=caption if len(media_group) == 0 else ""))
+
+        await message.reply_media_group(media_group)
+
     except Exception as e:
-        print(f"❌ Error fetching stories: {e}")
-        return []
-
-
-@Client.on_callback_query(filters.regex("stories:(.*)"))
-async def send_stories(client, callback_query):
-    username = callback_query.data.split(":")[1]
-    msg = await callback_query.message.reply(f"⏳ Fetching stories from @{username}...")
-
-    stories = await fetch_stories(username)
-
-    if not stories:
-        return await msg.edit("❌ No stories found or profile is private.")
-
-    for story_url in stories:
-        await callback_query.message.reply_media(story_url)
-
-    await msg.edit(f"✅ Fetched {len(stories)} stories from @{username}.")
-  
+        await message.reply(f"❌ Failed to fetch stories: `{e}`")

@@ -1,50 +1,20 @@
-from pyrogram import Client, filters
-from pyrogram.types import CallbackQuery
-from scraper import fetch_page
-from Config import SESSION_ID
-from playwright.async_api import async_playwright
-import re
-import asyncio
+import os
+from Scraper import fetch_highlights_data
 
-
-async def fetch_highlight_urls(username):
+async def fetch_highlights(message, username):
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(storage_state=SESSION_ID)
-            page = await context.new_page()
+        highlights = await fetch_highlights_data(username)
+        if not highlights:
+            return await message.reply("❌ No highlights found.")
 
-            await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
-            await asyncio.sleep(3)
+        from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-            highlights = await page.query_selector_all('._aam8')
-            data = []
-            for h in highlights:
-                title = await h.inner_text()
-                onclick = await h.get_attribute("onclick")
-                href = await h.get_attribute("href")
-                if href:
-                    data.append({"title": title, "url": f"https://www.instagram.com{href}"})
+        buttons = []
+        for item in highlights[:10]:
+            buttons.append([InlineKeyboardButton(text=item['title'], url=item['url'])])
 
-            await browser.close()
-            return data
+        markup = InlineKeyboardMarkup(buttons)
+        await message.reply("📂 Select a highlight to view:", reply_markup=markup)
+
     except Exception as e:
-        print(f"❌ Error fetching highlights: {e}")
-        return []
-
-
-@Client.on_callback_query(filters.regex("highlights:(.*)"))
-async def send_highlights(client, callback_query: CallbackQuery):
-    username = callback_query.data.split(":")[1]
-    msg = await callback_query.message.reply(f"⏳ Fetching highlights for @{username}...")
-
-    highlights = await fetch_highlight_urls(username)
-
-    if not highlights:
-        return await msg.edit("❌ No highlights found.")
-
-    for h in highlights[:5]:
-        await callback_query.message.reply(f"🎯 **{h['title']}**\n🔗 {h['url']}")
-
-    await msg.edit(f"✅ Found {len(highlights)} highlight albums for @{username}.")
-  
+        await message.reply(f"❌ Failed to fetch highlights: `{e}`")

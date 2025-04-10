@@ -32,7 +32,7 @@ async def fetch_instagram_profile(username, session_id):
 
 # Example usage:
 username = 'soniya_rajput_9911'  # Instagram username
-session_id = 'your-session-id-here'  # Replace with your session ID
+session_id = 'SESSION_ID'  # Replace with your session ID
 
 async def main():
     profile_data = await fetch_instagram_profile(username, session_id)

@@ -61,6 +61,22 @@ async def scrape_instagram(username: str):
             "dir": user_dir
         }
 
+async def fetch_page(url):
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            await page.goto(url, timeout=60000)
+            await page.wait_for_timeout(3000)  # Give time for JS to render
+            content = await page.content()
+            await browser.close()
+            return content
+    except Exception as e:
+        print(f"❌ Error fetching page: {e}")
+        return None
+
+
 async def download_file(page, url, path):
     try:
         async with page.expect_download() as download_info:

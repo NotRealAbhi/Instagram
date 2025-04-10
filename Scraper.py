@@ -14,11 +14,15 @@ headers = {
 }
 
 
+import json
+from playwright.async_api import async_playwright
+from Config import SESSION_ID
+
 async def fetch_page(url: str) -> str:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
-        
+
         # Add session cookie for Instagram
         await context.add_cookies([{
             "name": "sessionid",
@@ -26,15 +30,102 @@ async def fetch_page(url: str) -> str:
             "domain": ".instagram.com",
             "path": "/"
         }])
-        
+
         page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded")  # Wait for page load
-        await page.wait_for_selector("script[type='text/javascript']")  # Ensure required scripts are loaded
+        await page.goto(url, wait_until="domcontentloaded")  # Wait for page to load
         
+        # Increase the timeout and use a more reliable waiting strategy
+        try:
+            await page.wait_for_selector("script[type='text/javascript']", timeout=60000)  # 1 minute timeout
+        except Exception as e:
+            print(f"Error: {e}")  # Log error if it occurs
+            await browser.close()
+            return None  # Return None in case of failure
+
         html = await page.content()  # Get full page content
         await browser.close()
-        print(html)
         return html
+
+
+async def fetch_profile_info(username: str):
+    url = f"https://www.instagram.com/{username}/"
+    html = await fetch_page(url)
+
+    if not html:
+        raise Exception("Failed to fetch profile data.")
+
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+
+    scripts = soup.find_all("script", type="text/javascript")
+    data_script = next((s for s in scripts if "window._sharedData" in s.text), None)
+
+    if not data_script:
+        raise Exception("Couldn't extract profile data.")
+
+    try:
+        json_text = data_script.string.split(" = ", 1)[1].rstrip(";")
+        data = json.loads(json_text)
+        user = data["entry_data"]["ProfilePage"][0]["graphql"]["user"]
+
+        name = user["full_name"]
+        bio = user["biography"]
+        profile_pic = user["profile_pic_url_hd"]
+
+        caption = (
+            f"👤 **{name}**\n"
+            f"🔗 **Username:** `{username}`\n"
+            f"📖 **Bio:** {bio or 'N/A'}\n"
+            f"📸 **Posts:** {user['edge_owner_to_timeline_media']['count']}\n"
+            f"👥 **Followers:** {user['edge_followed_by']['count']}\n"
+            f"👣 **Following:** {user['edge_follow']['count']}\n"
+            f"🔒 **Private:** {user['is_private']}\n"
+            f"✔ **Verified:** {user['is_verified']}"
+        )
+
+        return profile_pic, caption
+    except Exception as e:
+        raise Exception(f"Error fetching profile info: {e}")
+
+
+async def fetch_stories(message, username):
+    url = f"https://www.instagram.com/{username}/"
+    html = await fetch_page(url)
+
+    if not html:
+        await message.reply("❌ Couldn't fetch stories.")
+        return
+
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    scripts = soup.find_all("script", type="text/javascript")
+    data_script = next((s for s in scripts if "window._sharedData" in s.text), None)
+
+    if not data_script:
+        await message.reply("❌ Couldn't extract stories data.")
+        return
+
+    try:
+        json_text = data_script.string.split(" = ", 1)[1].rstrip(";")
+        data = json.loads(json_text)
+        user = data["entry_data"]["ProfilePage"][0]["graphql"]["user"]
+        stories = user.get('edge_owner_to_timeline_media', {}).get('edges', [])
+
+        if not stories:
+            await message.reply("❌ No stories available.")
+            return
+
+        story_urls = [story['node']['display_url'] for story in stories]
+        await message.reply_text(f"Found {len(story_urls)} stories.")
+        for url in story_urls:
+            await message.reply_photo(url)
+    except Exception as e:
+        await message.reply(f"❌ Error fetching stories: {e}")
+
+
+# Add additional functions for highlights, posts, reels, etc., following the same structure.
+
+
 
 
 async def fetch_media_links(html: str) -> list:

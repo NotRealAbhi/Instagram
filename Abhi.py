@@ -1,143 +1,94 @@
-import os
-import re
-import shutil
-import instaloader
-import zipfile
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from Config import API_ID, API_HASH, BOT_TOKEN
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from Config import BOT_TOKEN, API_ID, API_HASH
 
-bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+from Handlers.Profile import fetch_profile_info
+from Handlers.Stories import fetch_stories
+from Handlers.Highlights import fetch_highlights
+from Handlers.Posts import fetch_posts
+from Handlers.Reels import fetch_reels
+from Handlers.Zipper import zip_all
 
-L = instaloader.Instaloader(dirname_pattern="downloads/{profile}")
-try:
-    L.load_session_from_file("i_.hot_boy")  # username used to login and save session
-except Exception as e:
-    print("❌ Failed to load session:", e)
+bot = Client("InstaBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 
-# Verify login
-try:
-    profile = instaloader.Profile.from_username(L.context, "instagram")  # dummy check
-    print("✅ Logged in successfully.")
-except Exception as e:
-    print("❌ Login failed:", e)
-
-def get_username(text: str):
+def get_username(text: str) -> str:
+    import re
     match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)
-    return match.group(1) if match else text.strip().split()[0]
+    if match:
+        return match.group(1)
+    return text.strip().split()[0]
 
-def zip_directory(path, zip_name):
-    zipf = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED)
-    for root, _, files in os.walk(path):
-        for file in files:
-            zipf.write(os.path.join(root, file), arcname=os.path.relpath(os.path.join(root, file), path))
-    zipf.close()
 
-@bot.on_message(filters.command("start"))
-async def start_handler(_, message: Message):
-    await message.reply_text("👋 Send an Instagram username or profile link to get profile info with media download options.")
+@bot.on_message(filters.command("start") & filters.private)
+async def start(_, message: Message):
+    await message.reply_text(
+        "**👋 Welcome to Instagram Scraper Bot!**\n\n"
+        "Send me any Instagram username or profile link to fetch profile pic, bio, stories, posts, reels, highlights, or download all!",
+    )
+
 
 @bot.on_message(filters.text & filters.private)
-async def profile_handler(_, message: Message):
+async def username_handler(_, message: Message):
+    username = get_username(message.text)
+    if not username:
+        return await message.reply_text("❌ Invalid Instagram username!")
+
     try:
-        username = get_username(message.text)
-        profile = instaloader.Profile.from_username(L.context, username)
-        target_dir = f"downloads/{username}"
-        os.makedirs(target_dir, exist_ok=True)
-        L.download_profile(profile, profile_pic_only=True)
+        profile_pic_path, caption = await fetch_profile_info(username)
 
-
-        caption = (
-            f"👤 **{profile.full_name}**\n"
-            f"🔗 **Username**: `{profile.username}`\n"
-            f"📌 **Bio**: {profile.biography or 'N/A'}\n"
-            f"📸 **Posts**: {profile.mediacount}\n"
-            f"👥 **Followers**: {profile.followers}\n"
-            f"👣 **Following**: {profile.followees}\n"
-            f"🔒 **Private**: {profile.is_private}\n"
-            f"✔️ **Verified**: {profile.is_verified}"
-        )
-
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📸 Posts", callback_data=f"posts:{username}"),
-             InlineKeyboardButton("🎞 Reels", callback_data=f"reels:{username}")],
-            [InlineKeyboardButton("🖼 Profile Pic", callback_data=f"profile_pic:{username}"),
+        buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📸 Profile Pic", callback_data=f"profile_pic:{username}"),
+             InlineKeyboardButton("📖 Bio", callback_data=f"bio:{username}")],
+            [InlineKeyboardButton("🎞 Reels", callback_data=f"reels:{username}"),
+             InlineKeyboardButton("📸 Posts", callback_data=f"posts:{username}")],
+            [InlineKeyboardButton("📂 Highlights", callback_data=f"highlights:{username}"),
              InlineKeyboardButton("📖 Stories", callback_data=f"stories:{username}")],
-            [InlineKeyboardButton("⬇️ Download ZIP", callback_data=f"zip:{username}")]
+            [InlineKeyboardButton("⬇️ ZIP All", callback_data=f"zip:{username}")]
         ])
 
-        pfp = os.path.join(target_dir, f"{username}_profile_pic.jpg")
-        if os.path.exists(pfp):
-            await message.reply_photo(photo=pfp, caption=caption, reply_markup=markup)
-        else:
-            await message.reply_text(caption, reply_markup=markup)
+        await message.reply_photo(
+            photo=profile_pic_path,
+            caption=caption,
+            reply_markup=buttons
+        )
 
     except Exception as e:
-        await message.reply_text(f"❌ Error: {e}")
+        await message.reply_text(f"❌ Error: `{e}`")
+
 
 @bot.on_callback_query()
-async def handle_callbacks(client, callback_query):
+async def handle_callbacks(_, query: CallbackQuery):
     try:
-        data = callback_query.data
-        query_type, username = data.split(":", 1)
-        target_dir = f"downloads/{username}"
-        os.makedirs(target_dir, exist_ok=True)
-        profile = instaloader.Profile.from_username(L.context, username)
+        data = query.data
+        action, username = data.split(":", 1)
 
-        if query_type == "profile_pic":
-            pic_path = os.path.join(target_dir, f"{username}_profile_pic.jpg")
-            if os.path.exists(pic_path):
-                await callback_query.message.reply_photo(pic_path, caption="🖼 Profile Picture")
-            else:
-                await callback_query.message.reply("❌ Profile picture not found.")
+        if action == "profile_pic" or action == "bio":
+            pic, caption = await fetch_profile_info(username)
+            await query.message.reply_photo(pic, caption)
 
-        elif query_type == "stories":
-            stories_path = os.path.join(target_dir, "stories")
-            shutil.rmtree(stories_path, ignore_errors=True)
-            L.download_stories(userids=[profile.userid], filename_target=stories_path)
-            if os.path.exists(stories_path):
-                for file in sorted(os.listdir(stories_path))[:10]:
-                    f = os.path.join(stories_path, file)
-                    if file.endswith(".mp4"):
-                        await callback_query.message.reply_video(f)
-                    elif file.endswith(".jpg"):
-                        await callback_query.message.reply_photo(f)
-            else:
-                await callback_query.message.reply("No stories available.")
+        elif action == "stories":
+            await fetch_stories(query.message, username)
 
-        elif query_type == "posts":
-            posts = profile.get_posts()
-            post_dir = os.path.join(target_dir, "posts")
-            os.makedirs(post_dir, exist_ok=True)
-            count = 0
-            for post in posts:
-                if count >= 5:  # Limit to 5 for quick demo
-                    break
-                L.download_post(post, target=post_dir)
-                count += 1
+        elif action == "highlights":
+            await fetch_highlights(query.message, username)
 
-            media = [os.path.join(post_dir, f) for f in os.listdir(post_dir) if f.endswith(".jpg")]
-            for i in range(0, len(media), 10):
-                batch = media[i:i + 10]
-                await callback_query.message.reply_media_group([{"type": "photo", "media": m} for m in batch])
+        elif action == "posts":
+            await fetch_posts(query.message, username)
 
-        elif query_type == "reels":
-            reels_dir = os.path.join(target_dir, "reels")
-            os.makedirs(reels_dir, exist_ok=True)
-            for post in profile.get_posts():
-                if post.typename == "GraphVideo":
-                    L.download_post(post, target=reels_dir)
-            reels = [os.path.join(reels_dir, f) for f in os.listdir(reels_dir) if f.endswith(".mp4")]
-            for r in reels:
-                await callback_query.message.reply_video(r)
+        elif action == "reels":
+            await fetch_reels(query.message, username)
 
-        elif query_type == "zip":
-            zip_path = f"{target_dir}.zip"
-            zip_directory(target_dir, zip_path)
-            await callback_query.message.reply_document(zip_path, caption="📦 Downloaded ZIP")
+        elif action == "zip":
+            await zip_all(query.message, username)
+
+        await query.answer()
 
     except Exception as e:
-        await callback_query.message.reply(f"❌ Error during `{query_type}`: {e}")
+        await query.message.reply_text(f"❌ Callback Error: {e}")
+        await query.answer()
 
-bot.run()
+if __name__ == "__main__":
+    print("🤖 Bot Started!")
+    bot.run()
+        

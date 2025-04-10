@@ -1,86 +1,71 @@
 import os
-import asyncio
+import re
+import aiohttp
+from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from Config import SESSION_ID
 
-DOWNLOADS_DIR = "downloads"
-os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
+        " Chrome/120.0.0.0 Safari/537.36"
+    )
+}
+
 
 async def fetch_page(url: str) -> str:
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                storage_state={"cookies": [{"name": "sessionid", "value": SESSION_ID, "domain": ".instagram.com"}]},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36"
-            )
-            page = await context.new_page()
-            await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(4000)
-            content = await page.content()
-            await browser.close()
-            return content
-    except Exception as e:
-        print(f"[scraper.py] Error in fetch_page: {e}")
-        return ""
-
-async def fetch_html(url: str) -> str:
-    async with aiohttp.ClientSession(headers=HEADERS) as session:
-        async with session.get(url) as response:
-            return await response.text()
-
-
-async def download_file(url: str, filename: str) -> str:
-    if not url or not filename:
-        print("[scraper.py] Invalid URL or filename passed to download_file.")
-        return None
-
-    try:
-        import aiohttp
-
-        path = os.path.join(DOWNLOADS_DIR, filename)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status == 200:
-                    with open(path, "wb") as f:
-                        f.write(await resp.read())
-                    return path
-                else:
-                    print(f"[scraper.py] Failed to download file, status code: {resp.status}")
-                    return None
-    except Exception as e:
-        print(f"[scraper.py] Exception in download_file: {e}")
-        return None
-
-async def fetch_media_links(url: str, selector: str, attr: str = "src", limit: int = 5) -> list:
-    links = []
-
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
             storage_state={
-                "cookies": [
-                    {
-                        "name": "sessionid",
-                        "value": SESSION_ID,
-                        "domain": ".instagram.com"
-                    }
-                ]
+                "cookies": [{
+                    "name": "sessionid",
+                    "value": SESSION_ID,
+                    "domain": ".instagram.com"
+                }]
             }
         )
         page = await context.new_page()
-        await page.goto(url, timeout=60000)
+        await page.goto(url)
+        await page.wait_for_timeout(3000)
+        html = await page.content()
+        await browser.close()
+        return html
 
-        try:
-            await page.wait_for_selector(selector, timeout=10000)
-            elements = await page.query_selector_all(selector)
 
-            for el in elements[:limit]:
-                attr_value = await el.get_attribute(attr)
-                if attr_value:
-                    links.append(attr_value)
+async def fetch_media_links(html: str) -> list:
+    soup = BeautifulSoup(html, "html.parser")
+    scripts = soup.find_all("script", type="text/javascript")
+    media_links = []
 
-        finally:
-            await browser.close()
+    for script in scripts:
+        if script.string and "display_url" in script.string:
+            urls = re.findall(r'"display_url":"([^"]+)"', script.string)
+            media_links.extend([url.replace("\\u0026", "&") for url in urls])
 
-    return links
+    return media_links
+
+
+async def download_file(url: str, filename: str) -> str:
+    ext = os.path.splitext(url.split("?")[0])[-1]
+    if not ext.startswith("."):
+        ext = ".jpg"
+
+    path = f"{filename}{ext}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    raise Exception(f"Failed to download. Status code: {response.status}")
+                content = await response.read()
+                if not content:
+                    raise Exception("Downloaded content is empty.")
+                with open(path, "wb") as f:
+                    f.write(content)
+        return path
+
+    except Exception as e:
+        print(f"[ERROR] download_file() failed: {e}")
+        return None

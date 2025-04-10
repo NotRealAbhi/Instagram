@@ -1,3 +1,4 @@
+import asyncio
 import requests
 from Config import SESSION_ID
 from playwright.async_api import async_playwright

@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from Config import BOT_TOKEN, API_ID, API_HASH
 
-from Handlers.Profile import fetch_page
+from Handlers.Profile import fetch_profile_info
 from Handlers.Stories import fetch_stories
 from Handlers.Highlights import fetch_highlights
 from Handlers.Posts import fetch_posts
@@ -35,7 +35,7 @@ async def username_handler(_, message: Message):
         return await message.reply_text("❌ Invalid Instagram username!")
 
     try:
-        profile_pic_path, caption = await fetch_page(username)
+        profile_pic_path, caption = await fetch_profile_info(username)
 
         buttons = InlineKeyboardMarkup([
             [InlineKeyboardButton("📸 Profile Pic", callback_data=f"profile_pic:{username}"),

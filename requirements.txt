@@ -1,3 +1,4 @@
+playwright
 pyrofork
-tgcrypto
-instaloader==4.10
+bs4
+aiohttp

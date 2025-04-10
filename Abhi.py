@@ -9,11 +9,19 @@ from Config import API_ID, API_HASH, BOT_TOKEN
 
 bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-L = instaloader.Instaloader()
-L.load_session_from_file("i_.hot_boy")
-profile = instaloader.Profile.from_username(L.context, "i_.hot_boy")
-print(profile.full_name, profile.followers)
+sessionid = "70251829033%3AWxEGqggNOdfsNJ%3A13%3AAYcKvGI0IPZ6F1PFMA3Oh0dp0jw-xf1OBp2E_o515g"  # paste your browser sessionid here
 
+L = instaloader.Instaloader()
+
+# Set sessionid cookie manually
+L.context._session.cookies.set("sessionid", sessionid)
+
+try:
+    profile = instaloader.Profile.from_username(L.context, "i_.hot_boy")
+    print(f"✅ Logged in as: {profile.username}")
+    print(f"👥 Followers: {profile.followers}")
+except Exception as e:
+    print("❌ Login failed:", e)
 
 def get_username(text: str):
     match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)

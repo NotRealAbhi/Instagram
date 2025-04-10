@@ -1,3 +1,3 @@
-API_ID = 12345678
-API_HASH = "your_api_hash"
-BOT_TOKEN = "your_bot_token"
+API_ID = 6067591
+API_HASH = "94e17044c2393f43fda31d3afe77b26b"
+BOT_TOKEN = "8101654222:AAFVlZpdDZwVxEmtXPu42VpEOwwmjcO4N4A"

@@ -15,9 +15,6 @@ headers = {
 
 
 import json
-from playwright.async_api import async_playwright
-from Config import SESSION_ID
-
 async def fetch_page(url: str) -> str:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -34,16 +31,20 @@ async def fetch_page(url: str) -> str:
         page = await context.new_page()
         await page.goto(url, wait_until="domcontentloaded")  # Wait for page to load
         
-        # Increase the timeout and use a more reliable waiting strategy
         try:
-            await page.wait_for_selector("script[type='text/javascript']", timeout=60000)  # 1 minute timeout
+            await page.wait_for_selector("script[type='text/javascript']", timeout=60000)  # 1-minute timeout
         except Exception as e:
             print(f"Error: {e}")  # Log error if it occurs
             await browser.close()
-            return None  # Return None in case of failure
+            return None  # Return None if the page does not load properly or timeout occurs
 
         html = await page.content()  # Get full page content
         await browser.close()
+        
+        if not html:
+            print("Error: No HTML content fetched")
+            return None  # Return None if no HTML content is fetched
+
         return html
 
 
@@ -52,7 +53,7 @@ async def fetch_profile_info(username: str):
     html = await fetch_page(url)
 
     if not html:
-        raise Exception("Failed to fetch profile data.")
+        raise Exception("Failed to fetch profile data.")  # This will give a clear error if fetch_page fails
 
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
@@ -86,7 +87,6 @@ async def fetch_profile_info(username: str):
         return profile_pic, caption
     except Exception as e:
         raise Exception(f"Error fetching profile info: {e}")
-
 
 async def fetch_stories(message, username):
     url = f"https://www.instagram.com/{username}/"

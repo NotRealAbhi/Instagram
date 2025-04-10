@@ -11,7 +11,7 @@ bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 
 L = instaloader.Instaloader(dirname_pattern="downloads/{profile}")
 try:
-    L.load_session_from_file("your_username")  # username used to login and save session
+    L.load_session_from_file("i_.hot_boy")  # username used to login and save session
 except Exception as e:
     print("❌ Failed to load session:", e)
 

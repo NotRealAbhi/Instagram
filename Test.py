@@ -1,7 +1,7 @@
 from playwright.async_api import async_playwright
 from Config import SESSION_ID
 
-async def fetch_instagram_profile(username, session_id):
+async def fetch_instagram_profile(username):
     try:
         # Launch Playwright browser
         async with async_playwright() as p:
@@ -51,7 +51,7 @@ import asyncio
 username = 'soniya_rajput_9911'
 
 async def main():
-    profile_data = await fetch_instagram_profile(username, session_id)
+    profile_data = await fetch_instagram_profile(username)
     if profile_data:
         print(f"Profile Data: {profile_data}")
     else:

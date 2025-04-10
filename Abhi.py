@@ -15,15 +15,21 @@ L = instaloader.Instaloader(
     save_metadata=False,
     post_metadata_txt_pattern=""
 )
-L.download_stories = True
 
-
-# Optional login for private profiles
+# ✅ Login to avoid 401 errors
+# Option A: Username/Password (Enable this if you want)
 # L.login("your_username", "your_password")
 
+# Option B: Session login (Recommended)
+# Make sure you saved a session file before with: instaloader --login=your_username
+L.load_session_from_file("your_username")  # replace with your actual username
+
 def get_username(text: str):
-    match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)/?", text)
-    return match.group(1) if match else text.strip().split()[1]
+    match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)
+    if match:
+        return match.group(1)
+    parts = text.strip().split()
+    return parts[0] if parts else None
 
 def zip_directory(path, zip_name):
     zipf = zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED)
@@ -42,6 +48,9 @@ async def start_handler(_, message: Message):
 async def profile_handler(_, message: Message):
     try:
         username = get_username(message.text)
+        if not username:
+            return await message.reply_text("❌ Invalid username or link!")
+
         profile = instaloader.Profile.from_username(L.context, username)
         target_dir = f"downloads/{username}"
         L.download_profile(profile, profile_pic_only=True)
@@ -77,12 +86,12 @@ async def profile_handler(_, message: Message):
 
 @bot.on_callback_query()
 async def handle_callbacks(client, callback_query):
-    data = callback_query.data
-    query_type, username = data.split(":", 1)
-    target_dir = f"downloads/{username}"
-    profile = instaloader.Profile.from_username(L.context, username)
-
     try:
+        data = callback_query.data
+        query_type, username = data.split(":", 1)
+        target_dir = f"downloads/{username}"
+        profile = instaloader.Profile.from_username(L.context, username)
+
         if query_type == "profile_pic":
             pic_path = os.path.join(target_dir, "profile_pic.jpg")
             await callback_query.message.reply_photo(pic_path, caption="🖼 Profile Picture")
@@ -146,4 +155,3 @@ async def handle_callbacks(client, callback_query):
         await callback_query.message.reply(f"❌ Error during `{query_type}`: {e}")
 
 bot.run()
-          

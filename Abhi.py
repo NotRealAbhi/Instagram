@@ -2,7 +2,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from Config import BOT_TOKEN, API_ID, API_HASH
 
-from Handlers.Profile import fetch_profile_info
+from Handlers.Profile import fetch_page
 from Handlers.Stories import fetch_stories
 from Handlers.Highlights import fetch_highlights
 from Handlers.Posts import fetch_posts

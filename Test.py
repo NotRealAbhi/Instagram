@@ -14,7 +14,7 @@ async def fetch_instagram_profile(username):
             cookies = [{
                 'name': 'sessionid',
                 'value': SESSION_ID,
-                'domain': '.instagram.com'
+                'domain': '.instagram.com',
                 'path': '/'
             }]
             await context.add_cookies(cookies)  # Add cookies to the context'path': '/'

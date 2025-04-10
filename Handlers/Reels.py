@@ -1,4 +1,4 @@
-from scraper import fetch_reels_data
+from Scraper import fetch_reels_data
 from pyrogram.types import InputMediaVideo
 
 async def fetch_reels(message, username):

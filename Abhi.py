@@ -11,11 +11,12 @@ bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 
 L = instaloader.Instaloader(
     dirname_pattern="downloads/{target}",
-    download_stories=True,
     download_video_thumbnails=False,
     save_metadata=False,
-    post_metadata_txt_pattern="",
+    post_metadata_txt_pattern=""
 )
+L.download_stories = True
+
 
 # Optional login for private profiles
 # L.login("your_username", "your_password")

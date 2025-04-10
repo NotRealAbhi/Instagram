@@ -9,22 +9,11 @@ from Config import API_ID, API_HASH, BOT_TOKEN
 
 bot = Client("insta_scraper_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-USERNAME = "I._hot_boy"
-PASSWORD = "Sinchu@2004"
+L = instaloader.Instaloader()
+L.load_session_from_file("i_.hot_boy")
+profile = instaloader.Profile.from_username(L.context, "i_.hot_boy")
+print(profile.full_name, profile.followers)
 
-L = instaloader.Instaloader(
-    dirname_pattern="downloads/{target}",
-    download_video_thumbnails=False,
-    save_metadata=False,
-    post_metadata_txt_pattern=""
-)
-
-# Direct login
-L.login(USERNAME, PASSWORD)
-
-# Now you can use it normally
-profile = instaloader.Profile.from_username(L.context, "soniya_rajput_9911")
-print(f"Full name: {profile.full_name}")
 
 def get_username(text: str):
     match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)

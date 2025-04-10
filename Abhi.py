@@ -42,7 +42,8 @@ async def profile_handler(_, message: Message):
         profile = instaloader.Profile.from_username(L.context, username)
         target_dir = f"downloads/{username}"
         os.makedirs(target_dir, exist_ok=True)
-        L.download_profile(profile, profile_pic_only=True, dirname_pattern=target_dir)
+        L.download_profile(profile, profile_pic_only=True, target=target_dir)
+
 
         caption = (
             f"👤 **{profile.full_name}**\n"

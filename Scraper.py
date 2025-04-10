@@ -18,13 +18,14 @@ async def fetch_page(url: str) -> str:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
-            storage_state={
-                "cookies": [{
-                    "name": "sessionid",
-                    "value": SESSION_ID,
-                    "domain": ".instagram.com"
-                }]
-            }
+            cookies=[{
+                "name": "sessionid",
+                "value": SESSION_ID,
+                "domain": ".instagram.com",
+                "path": "/",
+                "url": "https://www.instagram.com"
+            }],
+            user_agent=headers["User-Agent"]
         )
         page = await context.new_page()
         await page.goto(url)

@@ -3,7 +3,7 @@ import os
 import aiofiles
 import uuid
 from bs4 import BeautifulSoup
-from scraper import fetch_page
+from Scraper import fetch_page
 
 async def fetch_profile_info(username):
     url = f"https://www.instagram.com/{username}/"

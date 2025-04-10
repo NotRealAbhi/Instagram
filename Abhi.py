@@ -22,7 +22,7 @@ L = instaloader.Instaloader(
 
 # Option B: Session login (Recommended)
 # Make sure you saved a session file before with: instaloader --login=your_username
-L.load_session_from_file("your_username")  # replace with your actual username
+L.load_session_from_file("43hi1_")  # replace with your actual username
 
 def get_username(text: str):
     match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)

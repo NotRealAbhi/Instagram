@@ -1,34 +1,57 @@
-import aiohttp
 import os
 import zipfile
-import uuid
-from Scraper import fetch_all_media_urls
+import shutil
+from pyrogram.types import Message
+from Scraper import fetch_page, fetch_media_links, download_file
 
-async def zip_all(message, username):
+
+async def zip_all(message: Message, username: str):
     try:
-        media_urls = await fetch_all_media_urls(username)
-        if not media_urls:
-            return await message.reply("❌ No media available to zip.")
+        await message.reply("📦 Fetching all media and creating ZIP...")
 
-        folder = f"temp/{uuid.uuid4()}"
-        os.makedirs(folder, exist_ok=True)
+        # Create temp folder
+        temp_dir = f"temp/{username}"
+        os.makedirs(temp_dir, exist_ok=True)
 
-        async with aiohttp.ClientSession() as session:
-            for idx, media in enumerate(media_urls):
-                url = media["url"]
-                ext = ".mp4" if media["type"] == "video" else ".jpg"
-                path = os.path.join(folder, f"media_{idx+1}{ext}")
-                async with session.get(url) as resp:
-                    with open(path, "wb") as f:
-                        f.write(await resp.read())
+        # 1. Profile Pic & Info
+        profile_pic, _ = await fetch_page(username)
+        if profile_pic:
+            shutil.copy(profile_pic, os.path.join(temp_dir, "profile_pic.jpg"))
 
-        zip_path = f"{folder}.zip"
+        # 2. Posts, Reels, Stories, Highlights (use fake endpoints for simulation)
+        media_types = {
+            "posts": f"https://www.instagram.com/{username}/",
+            "reels": f"https://www.instagram.com/{username}/reels/",
+            "stories": f"https://www.instagram.com/stories/{username}/",
+            "highlights": f"https://www.instagram.com/{username}/highlights/"
+        }
+
+        for media_name, url in media_types.items():
+            html = await fetch_page(url)
+            links = await fetch_media_links(html)
+            for i, link in enumerate(links[:5]):
+                file_path = await download_file(link, f"{media_name}_{i}.mp4")
+                if file_path:
+                    shutil.move(file_path, os.path.join(temp_dir, os.path.basename(file_path)))
+
+        # Zip all media
+        zip_path = f"{username}_all_media.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
-            for file in os.listdir(folder):
-                zipf.write(os.path.join(folder, file), arcname=file)
+            for root, _, files in os.walk(temp_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, temp_dir)
+                    zipf.write(file_path, arcname)
 
-        await message.reply_document(document=zip_path, caption=f"📦 All media from @{username}")
+        # Send ZIP
+        await message.reply_document(zip_path, caption=f"✅ All media for **{username}** zipped!")
 
     except Exception as e:
-        await message.reply(f"❌ ZIP creation failed: {e}")
-      
+        await message.reply(f"❌ ZIP error: {e}")
+
+    finally:
+        # Cleanup
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        if os.path.exists(zip_path):
+            os.remove(zip_path)

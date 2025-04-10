@@ -1,19 +1,41 @@
-from Scraper import fetch_reels_data
-from pyrogram.types import InputMediaVideo
+import os
+from Scraper import fetch_page, download_file
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from bs4 import BeautifulSoup
+
 
 async def fetch_reels(message, username):
     try:
-        reels = await fetch_reels_data(username)
-        if not reels:
-            return await message.reply("❌ No reels found.")
+        url = f"https://www.instagram.com/{username}/reels/"
+        html = await fetch_page(url)
 
-        media_group = []
+        if not html:
+            return await message.reply("❌ Failed to load Reels page.")
 
-        for i, reel in enumerate(reels[:10]):
-            media_group.append(InputMediaVideo(media=reel["url"], caption=f"🎞 Reel {i+1}" if i == 0 else ""))
+        soup = BeautifulSoup(html, "html.parser")
 
-        await message.reply_media_group(media_group)
+        video_urls = []
+        for video in soup.find_all("video"):
+            src = video.get("src")
+            if src:
+                video_urls.append(src)
+
+        if not video_urls:
+            return await message.reply("❌ No Reels found.")
+
+        buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅️ Back", callback_data=f"profile_pic:{username}")]
+        ])
+
+        count = 0
+        for i, url in enumerate(video_urls):
+            file_name = f"{username}_reel_{i}.mp4"
+            path = await download_file(url, file_name)
+            if path:
+                await message.reply_video(video=path, caption=f"🎞 Reel {i+1}", reply_markup=buttons)
+                count += 1
+                if count >= 5:  # Limit to 5 reels
+                    break
 
     except Exception as e:
-        await message.reply(f"❌ Error fetching reels: {e}")
-      
+        await message.reply(f"❌ Error loading reels: {e}")

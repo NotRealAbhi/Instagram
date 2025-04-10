@@ -35,7 +35,7 @@ async def username_handler(_, message: Message):
         return await message.reply_text("❌ Invalid Instagram username!")
 
     try:
-        profile_pic_path, caption = await fetch_profile_info(username)
+        profile_pic_path, caption = await fetch_page(username)
 
         buttons = InlineKeyboardMarkup([
             [InlineKeyboardButton("📸 Profile Pic", callback_data=f"profile_pic:{username}"),

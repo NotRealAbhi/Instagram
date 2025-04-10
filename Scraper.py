@@ -24,6 +24,12 @@ async def fetch_page(url: str) -> str:
         print(f"[scraper.py] Error in fetch_page: {e}")
         return ""
 
+async def fetch_html(url: str) -> str:
+    async with aiohttp.ClientSession(headers=HEADERS) as session:
+        async with session.get(url) as response:
+            return await response.text()
+
+
 async def download_file(url: str, filename: str) -> str:
     if not url or not filename:
         print("[scraper.py] Invalid URL or filename passed to download_file.")
@@ -45,3 +51,36 @@ async def download_file(url: str, filename: str) -> str:
     except Exception as e:
         print(f"[scraper.py] Exception in download_file: {e}")
         return None
+
+async def fetch_media_links(url: str, selector: str, attr: str = "src", limit: int = 5) -> list:
+    links = []
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            storage_state={
+                "cookies": [
+                    {
+                        "name": "sessionid",
+                        "value": SESSION_ID,
+                        "domain": ".instagram.com"
+                    }
+                ]
+            }
+        )
+        page = await context.new_page()
+        await page.goto(url, timeout=60000)
+
+        try:
+            await page.wait_for_selector(selector, timeout=10000)
+            elements = await page.query_selector_all(selector)
+
+            for el in elements[:limit]:
+                attr_value = await el.get_attribute(attr)
+                if attr_value:
+                    links.append(attr_value)
+
+        finally:
+            await browser.close()
+
+    return links

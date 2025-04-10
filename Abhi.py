@@ -1,94 +1,116 @@
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from Config import BOT_TOKEN, API_ID, API_HASH
+# Abhi.py
+import logging
+from pyrogram import Client, InlineKeyboardButton, InlineKeyboardMarkup, filters
+from Handlers.Profile import get_profile_data
+from Handlers.Stories import get_stories
+from Handlers.Highlights import get_highlights
+from Handlers.Posts import get_posts
+from Handlers.Reels import get_reels
+from Handlers.Zipper import zip_media
+from Config import API_ID, API_HASH, BOT_TOKEN
+import os
 
-from Handlers.Profile import fetch_profile_info
-from Handlers.Stories import fetch_stories
-from Handlers.Highlights import fetch_highlights
-from Handlers.Posts import fetch_posts
-from Handlers.Reels import fetch_reels
-from Handlers.Zipper import zip_all
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
-bot = Client("InstaBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# Initialize the Pyrogram client (Telegram bot)
+app = Client("InstagramBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+@app.on_message(filters.command("start"))
+async def start(client, message):
+    # Send a welcome message with inline keyboard
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Profile", callback_data="profile"),
+            InlineKeyboardButton("Stories", callback_data="stories")
+        ],
+        [
+            InlineKeyboardButton("Highlights", callback_data="highlights"),
+            InlineKeyboardButton("Posts", callback_data="posts")
+        ],
+        [
+            InlineKeyboardButton("Reels", callback_data="reels"),
+            InlineKeyboardButton("Zip Media", callback_data="zip_media")
+        ]
+    ])
+    await message.reply("Welcome to Instagram Scraper Bot! Please choose an option below.", reply_markup=keyboard)
 
-def get_username(text: str) -> str:
-    import re
-    match = re.search(r"(?:https?://)?(?:www\.)?instagram\.com/([A-Za-z0-9_.]+)", text)
-    if match:
-        return match.group(1)
-    return text.strip().split()[0]
-
-
-@bot.on_message(filters.command("start") & filters.private)
-async def start(_, message: Message):
-    await message.reply_text(
-        "**👋 Welcome to Instagram Scraper Bot!**\n\n"
-        "Send me any Instagram username or profile link to fetch profile pic, bio, stories, posts, reels, highlights, or download all!",
-    )
-
-
-@bot.on_message(filters.text & filters.private)
-async def username_handler(_, message: Message):
-    username = get_username(message.text)
+@app.on_callback_query(filters.regex('^(profile|stories|highlights|posts|reels|zip_media)$'))
+async def handle_buttons(client, callback_query):
+    username = callback_query.message.text.split(":", 1)[1].strip() if ":" in callback_query.message.text else None
+    
     if not username:
-        return await message.reply_text("❌ Invalid Instagram username!")
-
-    try:
-        profile_pic_path, caption = await fetch_profile_info(username)
-
-        buttons = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📸 Profile Pic", callback_data=f"profile_pic:{username}"),
-             InlineKeyboardButton("📖 Bio", callback_data=f"bio:{username}")],
-            [InlineKeyboardButton("🎞 Reels", callback_data=f"reels:{username}"),
-             InlineKeyboardButton("📸 Posts", callback_data=f"posts:{username}")],
-            [InlineKeyboardButton("📂 Highlights", callback_data=f"highlights:{username}"),
-             InlineKeyboardButton("📖 Stories", callback_data=f"stories:{username}")],
-            [InlineKeyboardButton("⬇️ ZIP All", callback_data=f"zip:{username}")]
-        ])
-
-        await message.reply_photo(
-            photo=profile_pic_path,
-            caption=caption,
-            reply_markup=buttons
+        await callback_query.message.reply(
+            "Please send the Instagram username you want to scrape (e.g., soniya_rajput_9911).",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Cancel", callback_data="cancel")]
+            ])
         )
+        return
 
-    except Exception as e:
-        await message.reply_text(f"❌ Error: `{e}`")
+    media_files = []  # List to store media files
 
+    if callback_query.data == "profile":
+        profile_data = await get_profile_data(username)
+        await callback_query.message.reply(profile_data)
 
-@bot.on_callback_query()
-async def handle_callbacks(_, query: CallbackQuery):
-    try:
-        data = query.data
-        action, username = data.split(":", 1)
+    elif callback_query.data == "stories":
+        stories_data = await get_stories(username)
+        await callback_query.message.reply(stories_data)
 
-        if action == "profile_pic" or action == "bio":
-            pic, caption = await fetch_profile_info(username)
-            await query.message.reply_photo(pic, caption)
+    elif callback_query.data == "highlights":
+        highlights_data = await get_highlights(username)
+        await callback_query.message.reply(highlights_data)
 
-        elif action == "stories":
-            await fetch_stories(query.message, username)
+    elif callback_query.data == "posts":
+        posts_data = await get_posts(username)
+        await callback_query.message.reply(posts_data)
 
-        elif action == "highlights":
-            await fetch_highlights(query.message, username)
+    elif callback_query.data == "reels":
+        reels_data = await get_reels(username)
+        await callback_query.message.reply(reels_data)
 
-        elif action == "posts":
-            await fetch_posts(query.message, username)
+    elif callback_query.data == "zip_media":
+        # Collect media for zipping
+        profile_data = await get_profile_data(username)
+        media_files.append(profile_data)  # Example: profile picture file
+        posts_data = await get_posts(username)
+        media_files.extend(posts_data)  # Example: post images/videos
+        # Add more media as needed (stories, highlights, reels)
 
-        elif action == "reels":
-            await fetch_reels(query.message, username)
+        # Create zip of the collected media files
+        zip_filename = zip_media(media_files)
 
-        elif action == "zip":
-            await zip_all(query.message, username)
+        # Send the ZIP file
+        await callback_query.message.reply_document(document=zip_filename)
 
-        await query.answer()
+        # Remove the zip file after sending
+        os.remove(zip_filename)
 
-    except Exception as e:
-        await query.message.reply_text(f"❌ Callback Error: {e}")
-        await query.answer()
+@app.on_message(filters.text)
+async def ask_for_username(client, message):
+    if message.text:
+        username = message.text.strip()
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("Profile", callback_data=f"profile:{username}"),
+                InlineKeyboardButton("Stories", callback_data=f"stories:{username}")
+            ],
+            [
+                InlineKeyboardButton("Highlights", callback_data=f"highlights:{username}"),
+                InlineKeyboardButton("Posts", callback_data=f"posts:{username}")
+            ],
+            [
+                InlineKeyboardButton("Reels", callback_data=f"reels:{username}"),
+                InlineKeyboardButton("Zip Media", callback_data=f"zip_media:{username}")
+            ]
+        ])
+        await message.reply(f"Now choose the data you want to fetch for {username}:", reply_markup=keyboard)
+
+@app.on_callback_query(filters.regex('^cancel$'))
+async def cancel(client, callback_query):
+    await callback_query.message.reply("You have cancelled the action. Type any text to restart the process.")
+    await callback_query.message.delete()
 
 if __name__ == "__main__":
-    print("🤖 Bot Started!")
-    bot.run()
-        
+    app.run()

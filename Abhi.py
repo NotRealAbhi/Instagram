@@ -1,6 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from scraper import fetch_instagram_profile
+from Scraper import fetch_instagram_profile
 from Config import BOT_TOKEN, SESSION_ID, API_ID, API_HASH
 import re
 

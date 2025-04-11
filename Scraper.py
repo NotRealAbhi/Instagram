@@ -1,90 +1,71 @@
+import os
 from playwright.async_api import async_playwright
-from bs4 import BeautifulSoup
 from Config import SESSION_ID
-import json
 
-async def fetch_instagram_data(username: str):
-    """Fetch data from Instagram profile using Playwright and BeautifulSoup"""
+async def fetch_instagram_profile(username):
     try:
-        # Launch Playwright browser and set up the context with session cookies
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
 
-            # Add session cookies for authentication
-            cookies = [{
-                'name': 'sessionid',
-                'value': SESSION_ID,  # session ID should be defined in Config.py
-                'domain': '.instagram.com',
-                'path': '/'
-            }]
-            await context.add_cookies(cookies)  # Add cookies to the context
+            # Add Instagram session cookie
+            await context.add_cookies([{
+                "name": "sessionid",
+                "value": SESSION_ID,
+                "domain": ".instagram.com",
+                "path": "/"
+            }])
 
             page = await context.new_page()
-            await page.goto(f'https://www.instagram.com/{username}/', wait_until="domcontentloaded")
 
-            # Wait for page to load
-            await page.wait_for_timeout(5000)  # Wait for 5 seconds to ensure the page loads
+            # Go to the profile page
+            await page.goto(f"https://www.instagram.com/{username}/", wait_until="domcontentloaded")
+            await page.wait_for_timeout(3000)
 
-            # Extract raw page content to parse with BeautifulSoup
-            page_content = await page.content()
-            soup = BeautifulSoup(page_content, "html.parser")
+            # Get name and bio from meta tag
+            desc = await page.locator('meta[name="description"]').get_attribute('content')
+            name = await page.locator("header h2, header h1").first.inner_text()
+            profile_pic_url = await page.locator("img[data-testid='user-avatar']").first.get_attribute("src")
 
-            # Find the script containing the JSON profile data
-            scripts = soup.find_all("script", type="text/javascript")
-            data_script = next((s for s in scripts if "window._sharedData" in s.text), None)
+            # Fallback if image not found
+            if not profile_pic_url:
+                profile_pic_url = await page.locator("img[alt*='profile picture']").first.get_attribute("src")
 
-            if not data_script:
-                raise Exception("Couldn't extract profile data.")
+            # Scroll to load posts and reels
+            await page.mouse.wheel(0, 3000)
+            await page.wait_for_timeout(2000)
 
-            # Extract and parse the JSON data from the script tag
-            json_text = data_script.string.split(" = ", 1)[1].rstrip(";")
-            data = json.loads(json_text)
+            post_links = await page.eval_on_selector_all("article a", "els => els.map(e => e.href)")
+            posts = [url for url in post_links if "/p/" in url]
+            reels = [url for url in post_links if "/reel/" in url]
 
-            # Parse profile data
-            user = data["entry_data"]["ProfilePage"][0]["graphql"]["user"]
-            name = user.get("full_name", "N/A")
-            bio = user.get("biography", "N/A")
-            profile_pic = user.get("profile_pic_url_hd", "")
-            posts_count = user['edge_owner_to_timeline_media']['count']
-            followers_count = user['edge_followed_by']['count']
-            following_count = user['edge_follow']['count']
-            is_private = user['is_private']
-            is_verified = user['is_verified']
+            # Highlights
+            highlights = await page.eval_on_selector_all("._aasp", "els => els.map(e => e.textContent.trim())")
 
-            # Prepare profile data for display
-            caption = (
-                f"👤 **{name}**\n"
-                f"🔗 **Username:** `{username}`\n"
-                f"📖 **Bio:** {bio or 'N/A'}\n"
-                f"📸 **Posts:** {posts_count}\n"
-                f"👥 **Followers:** {followers_count}\n"
-                f"👣 **Following:** {following_count}\n"
-                f"🔒 **Private:** {is_private}\n"
-                f"✔ **Verified:** {is_verified}"
-            )
+            # Navigate to Stories page (if public stories exist)
+            await page.goto(f"https://www.instagram.com/stories/{username}/", wait_until="load")
+            await page.wait_for_timeout(2000)
 
-            # Close the browser and return the profile data
+            # Grab story URLs if available
+            story_elements = await page.query_selector_all("video, img")
+            stories = []
+            for el in story_elements:
+                src = await el.get_attribute("src")
+                if src:
+                    stories.append(src)
+
             await browser.close()
-            return profile_pic, caption
+
+            return {
+                "name": name or "Not Found",
+                "bio": desc or "Not Found",
+                "profile_picture": profile_pic_url,
+                "posts": posts[:10],  # Limit to 10 for safety
+                "reels": reels[:10],
+                "highlights": highlights or [],
+                "stories": stories or []
+            }
 
     except Exception as e:
-        print(f"Error: {e}")  # Print any errors encountered during the scraping process
-        return None, None  # Return None if scraping fails
-
-
-# Example usage of the scraper
-import asyncio
-
-async def main():
-    username = "43hi1_"
-    profile_pic, caption = await fetch_instagram_data(username)
-    
-    if profile_pic and caption:
-        print("Profile Pic URL:", profile_pic)
-        print("Profile Description:", caption)
-    else:
-        print("Failed to fetch profile data.")
-
-# Run the async main function
-asyncio.run(main())
+        print(f"❌ Scraper Error: {e}")
+        return None

@@ -3,7 +3,7 @@ import os
 import zipfile
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from scraper import fetch_instagram_profile
+from Scraper import fetch_instagram_profile
 from Config import BOT_TOKEN, API_ID, API_HASH
 
 app = Client("InstagramProfileBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)

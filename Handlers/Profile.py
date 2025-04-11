@@ -7,10 +7,8 @@ async def send_profile(client, message, username):
     await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
 
     try:
-        # Wait until at least the profile picture is visible
         await page.wait_for_selector("img", timeout=15000)
 
-        # Try multiple selectors for name and bio with fallback
         try:
             name = await page.locator("header section h1").first.inner_text()
         except:
@@ -34,10 +32,12 @@ async def send_profile(client, message, username):
             [InlineKeyboardButton("📦 Download All (ZIP)", callback_data=f"zip:{username}")]
         ])
 
+        caption = f"👤 Name: {name}\n🧾 Bio: {bio}"
+
         if pfp:
-            await message.reply_photo(pfp, caption=f"👤 Name: {name}\n🧾 Bio: {bio}", reply_markup=buttons)
+            await message.reply_photo(pfp, caption=caption, reply_markup=buttons)
         else:
-            await message.reply(f"👤 Name: {name}\n🧾 Bio: {bio}", reply_markup=buttons)
+            await message.reply(caption, reply_markup=buttons)
 
     except Exception as e:
         await message.reply(f"❌ Failed to fetch profile for `{username}`.\n\nError: `{e}`")

@@ -17,9 +17,17 @@ async def fetch_instagram_profile(username):
             }])
 
             page = await context.new_page()
-            await page.goto(f"https://www.instagram.com/{username}/", wait_until="domcontentloaded")
-            await page.wait_for_timeout(3000)
+            url = f"https://www.instagram.com/{username.strip().lower()}/"
+            print(f"[🌐 Visiting] {url}")
+            await page.goto(url, wait_until="domcontentloaded")
+            await page.wait_for_timeout(5000)
 
+            # DEBUG: Save HTML for inspection
+            content = await page.content()
+            with open("debug_profile.html", "w", encoding="utf-8") as f:
+                f.write(content)
+
+            # Try basic info
             name = await page.locator("header h1, header h2").first.inner_text()
             bio = await page.locator('meta[name="description"]').get_attribute('content')
             profile_pic_url = await page.locator("img[data-testid='user-avatar']").first.get_attribute("src")
@@ -27,32 +35,17 @@ async def fetch_instagram_profile(username):
             if not profile_pic_url:
                 profile_pic_url = await page.locator("img[alt*='profile picture']").first.get_attribute("src")
 
-            post_links = await page.eval_on_selector_all("article a", "els => els.map(e => e.href)")
-            posts = [url for url in post_links if "/p/" in url]
-            reels = [url for url in post_links if "/reel/" in url]
-
-            highlights = await page.eval_on_selector_all("._aasp", "els => els.map(e => e.textContent.trim())")
-
-            await page.goto(f"https://www.instagram.com/stories/{username}/", wait_until="load")
-            await page.wait_for_timeout(2000)
-            story_elements = await page.query_selector_all("video, img")
-            stories = []
-            for el in story_elements:
-                src = await el.get_attribute("src")
-                if src:
-                    stories.append(src)
-
             await browser.close()
+
+            if not name and not bio:
+                raise Exception("❌ Instagram structure not loaded.")
 
             return {
                 "name": name or "Unknown",
                 "bio": bio or "Not Found",
-                "profile_picture": profile_pic_url,
-                "posts": posts[:10],
-                "reels": reels[:10],
-                "highlights": highlights,
-                "stories": stories
+                "profile_picture": profile_pic_url
             }
+
     except Exception as e:
-        print(f"[❌ SCRAPER ERROR]: {e}")
+        print(f"[❌ ERROR]: {e}")
         return None

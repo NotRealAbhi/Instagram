@@ -1,14 +1,26 @@
+import asyncio
 from playwright.async_api import async_playwright
 from Config import SESSION_ID
 
-async def fetch_instagram_profile(username):
+
+async def fetch_instagram_profile(username: str):
+    url = f"https://www.instagram.com/{username}/"
+    profile_data = {
+        "name": username,
+        "bio": "No bio found.",
+        "profile_picture": None,
+        "reels": [],
+        "posts": [],
+        "stories": [],
+        "highlights": []
+    }
+
     try:
-        print(f"[🌐 Visiting] https://www.instagram.com/{username}/")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
 
-            # Set session ID cookie for Instagram auth
+            # Apply session cookie
             await context.add_cookies([{
                 'name': 'sessionid',
                 'value': SESSION_ID,
@@ -17,49 +29,69 @@ async def fetch_instagram_profile(username):
             }])
 
             page = await context.new_page()
-            await page.goto(f'https://www.instagram.com/{username}/', wait_until="domcontentloaded")
+            print(f"[🌐 Visiting] {url}")
+            await page.goto(url, timeout=60000)
 
-            await page.wait_for_timeout(3000)
+            # Wait for profile picture (fallback selector if old fails)
+            try:
+                await page.wait_for_selector("img[alt*='profile picture'], img[data-testid='user-avatar']", timeout=10000)
+                profile_pic = await page.query_selector("img[alt*='profile picture'], img[data-testid='user-avatar']")
+                profile_data["profile_picture"] = await profile_pic.get_attribute("src")
+            except:
+                print("⚠️ Profile picture not found.")
 
-            # Profile picture
-            profile_picture = await page.locator("img[data-testid='user-avatar']").first.get_attribute("src")
+            # Name and Bio
+            try:
+                name_el = await page.query_selector("header h2, header h1")
+                profile_data["name"] = await name_el.inner_text() if name_el else username
+            except:
+                pass
 
-            # Name and bio from meta tags
-            bio = await page.locator('meta[name="description"]').get_attribute("content")
-            name = await page.locator('meta[property="og:title"]').get_attribute("content")
+            try:
+                bio_el = await page.query_selector("div._aa_c span")
+                profile_data["bio"] = await bio_el.inner_text() if bio_el else "No bio found."
+            except:
+                pass
 
-            # Basic reels/posts/highlights/stories from href scan
-            links = await page.locator("a").all()
-            reels = []
-            posts = []
-            highlights = []
-            stories = []
+            # Posts
+            try:
+                posts = await page.query_selector_all("article div img")
+                for post in posts[:10]:
+                    src = await post.get_attribute("src")
+                    if src:
+                        profile_data["posts"].append(src)
+            except:
+                pass
 
-            for link in links:
-                href = await link.get_attribute("href")
-                if href:
-                    if "/reel/" in href:
-                        reels.append("https://www.instagram.com" + href)
-                    elif "/p/" in href:
-                        posts.append("https://www.instagram.com" + href)
-                    elif "/stories/highlights/" in href:
-                        highlights.append("https://www.instagram.com" + href)
-                    elif "/stories/" in href:
-                        stories.append("https://www.instagram.com" + href)
+            # Reels (navigate to reels tab)
+            try:
+                reels_tab = await page.query_selector("a[href$='/reels/']")
+                if reels_tab:
+                    await reels_tab.click()
+                    await page.wait_for_timeout(3000)
+                    reels = await page.query_selector_all("article video")
+                    for reel in reels[:5]:
+                        src = await reel.get_attribute("src")
+                        if src:
+                            profile_data["reels"].append(src)
+            except:
+                print("⚠️ Reels tab not found or empty.")
+
+            # Highlights & Stories (optional, dynamic)
+            # These require more effort or Instagram Graph API (not via scraping)
 
             await browser.close()
-
-            return {
-                "profile_picture": profile_picture,
-                "name": name or username,
-                "bio": bio or "",
-                "reels": list(set(reels)),
-                "posts": list(set(posts)),
-                "highlights": list(set(highlights)),
-                "stories": list(set(stories))
-            }
 
     except Exception as e:
         print(f"[❌ ERROR]: {e}")
         return None
-        
+
+    return profile_data
+
+
+# For testing
+if __name__ == "__main__":
+    username = input("Enter Instagram username: ")
+    result = asyncio.run(fetch_instagram_profile(username))
+    print(result)
+    

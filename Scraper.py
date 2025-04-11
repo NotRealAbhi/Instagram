@@ -1,87 +1,65 @@
 from playwright.async_api import async_playwright
-import asyncio
+from Config import SESSION_ID
 
 async def fetch_instagram_profile(username):
-    profile = {
-        "name": username,
-        "bio": "",
-        "profile_picture": "",
-        "posts": [],
-        "reels": [],
-        "highlights": [],
-        "stories": []
-    }
-
     try:
+        print(f"[🌐 Visiting] https://www.instagram.com/{username}/")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                storage_state="auth/session.json"
-            )
+            context = await browser.new_context()
+
+            # Set session ID cookie for Instagram auth
+            await context.add_cookies([{
+                'name': 'sessionid',
+                'value': SESSION_ID,
+                'domain': '.instagram.com',
+                'path': '/'
+            }])
+
             page = await context.new_page()
+            await page.goto(f'https://www.instagram.com/{username}/', wait_until="domcontentloaded")
 
-            print(f"[🌐 Visiting] https://www.instagram.com/{username}/")
-            await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
+            await page.wait_for_timeout(3000)
 
-            await page.wait_for_selector("img[data-testid='user-avatar']", timeout=15000)
-            profile_pic_elem = await page.query_selector("img[data-testid='user-avatar']")
-            profile["profile_picture"] = await profile_pic_elem.get_attribute("src")
+            # Profile picture
+            profile_picture = await page.locator("img[data-testid='user-avatar']").first.get_attribute("src")
 
-            name_elem = await page.query_selector("header h2")
-            if name_elem:
-                profile["name"] = await name_elem.inner_text()
+            # Name and bio from meta tags
+            bio = await page.locator('meta[name="description"]').get_attribute("content")
+            name = await page.locator('meta[property="og:title"]').get_attribute("content")
 
-            bio_elem = await page.query_selector("section div.x7a106z")
-            if bio_elem:
-                profile["bio"] = await bio_elem.inner_text()
+            # Basic reels/posts/highlights/stories from href scan
+            links = await page.locator("a").all()
+            reels = []
+            posts = []
+            highlights = []
+            stories = []
 
-            # Posts
-            post_links = await page.query_selector_all("article a")
-            for link in post_links:
+            for link in links:
                 href = await link.get_attribute("href")
-                if href and "/p/" in href:
-                    profile["posts"].append(f"https://www.instagram.com{href}")
-
-            # Reels
-            print(f"[🎞️ Reels] Scraping reels tab...")
-            await page.goto(f"https://www.instagram.com/{username}/reels/", timeout=60000)
-            await page.wait_for_selector("article", timeout=15000)
-            reels_links = await page.query_selector_all("article a")
-            for link in reels_links:
-                href = await link.get_attribute("href")
-                if href and "/reel/" in href:
-                    profile["reels"].append(f"https://www.instagram.com{href}")
-
-            # Highlights
-            print(f"[🧵 Highlights] Checking highlights...")
-            await page.goto(f"https://www.instagram.com/stories/highlights/{username}/", timeout=60000)
-            await asyncio.sleep(3)
-            highlight_elems = await page.query_selector_all(".x1lliihq")
-            for elem in highlight_elems:
-                text = await elem.inner_text()
-                if text:
-                    profile["highlights"].append(text)
-
-            # Stories - Hack via homepage
-            print(f"[⏳ Stories] Attempting story check...")
-            await page.goto("https://www.instagram.com", timeout=60000)
-            await asyncio.sleep(3)
-            story_elems = await page.query_selector_all("a[role='link']")
-            for elem in story_elems:
-                href = await elem.get_attribute("href")
-                if href and username in href:
-                    profile["stories"].append(f"https://www.instagram.com{href}")
+                if href:
+                    if "/reel/" in href:
+                        reels.append("https://www.instagram.com" + href)
+                    elif "/p/" in href:
+                        posts.append("https://www.instagram.com" + href)
+                    elif "/stories/highlights/" in href:
+                        highlights.append("https://www.instagram.com" + href)
+                    elif "/stories/" in href:
+                        stories.append("https://www.instagram.com" + href)
 
             await browser.close()
+
+            return {
+                "profile_picture": profile_picture,
+                "name": name or username,
+                "bio": bio or "",
+                "reels": list(set(reels)),
+                "posts": list(set(posts)),
+                "highlights": list(set(highlights)),
+                "stories": list(set(stories))
+            }
 
     except Exception as e:
         print(f"[❌ ERROR]: {e}")
         return None
-
-    return profile
-
-# Debug/Test
-if __name__ == "__main__":
-    username = "cristiano"
-    data = asyncio.run(fetch_instagram_profile(username))
-    print(data)
+        

@@ -22,18 +22,23 @@ async def fetch_instagram_profile(username):
             await page.goto(url, wait_until="domcontentloaded")
             await page.wait_for_timeout(5000)
 
-            # DEBUG: Save HTML for inspection
+            # Save debug HTML
             content = await page.content()
             with open("debug_profile.html", "w", encoding="utf-8") as f:
                 f.write(content)
 
-            # Try basic info
-            name = await page.locator("header h1, header h2").first.inner_text()
+            # Get profile bio from meta tag
             bio = await page.locator('meta[name="description"]').get_attribute('content')
-            profile_pic_url = await page.locator("img[data-testid='user-avatar']").first.get_attribute("src")
 
+            # Get name from header or fallback from page
+            name = await page.locator("header h1, header h2").first.inner_text()
+            if not name:
+                name = await page.locator("title").inner_text()
+
+            # Profile picture fallback (new selector)
+            profile_pic_url = await page.locator("img[alt*='profile']").first.get_attribute("src")
             if not profile_pic_url:
-                profile_pic_url = await page.locator("img[alt*='profile picture']").first.get_attribute("src")
+                profile_pic_url = await page.locator("img").first.get_attribute("src")
 
             await browser.close()
 
